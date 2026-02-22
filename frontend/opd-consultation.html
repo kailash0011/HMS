@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OPD Consultation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+  <h3>Consultation</h3>
+
+  <form id="consultForm">
+    <input class="form-control mb-2" placeholder="Appointment ID" id="appointment_id" required>
+    <textarea class="form-control mb-2" placeholder="Symptoms" id="symptoms"></textarea>
+    <textarea class="form-control mb-2" placeholder="Diagnosis" id="diagnosis"></textarea>
+    <textarea class="form-control mb-2" placeholder="Treatment Plan" id="treatment_plan"></textarea>
+
+    <h5>Prescription Items (one per line)</h5>
+    <small>Format: Medicine|Dosage|DurationDays|Frequency</small>
+    <textarea class="form-control mb-2" id="prescription_items"></textarea>
+
+    <h5>Investigation Items (one per line)</h5>
+    <small>Format: TestName|SampleType</small>
+    <textarea class="form-control mb-2" id="investigation_items"></textarea>
+
+    <button class="btn btn-primary">Save Consultation</button>
+  </form>
+
+<script>
+function parsePrescriptions(text) {
+  return text.split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [medicine_name, dosage, duration_days, frequency] = line.split("|");
+      return {
+        medicine_name,
+        dosage,
+        duration_days: parseInt(duration_days || "0", 10),
+        frequency
+      };
+    });
+}
+
+function parseInvestigations(text) {
+  return text.split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [test_name, sample_type] = line.split("|");
+      return { test_name, sample_type };
+    });
+}
+
+document.getElementById("consultForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const token = localStorage.getItem("token");
+
+  const appointment_id = document.getElementById("appointment_id").value;
+  const symptoms = document.getElementById("symptoms").value;
+  const diagnosis = document.getElementById("diagnosis").value;
+  const treatment_plan = document.getElementById("treatment_plan").value;
+
+  const consultRes = await fetch("http://localhost:5000/api/opd/consultations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+    body: JSON.stringify({ appointment_id, symptoms, diagnosis, treatment_plan })
+  });
+
+  const consultData = await consultRes.json();
+  if (!consultData.consultation_id) {
+    alert("Failed to save consultation");
+    return;
+  }
+
+  const prescription_items = parsePrescriptions(document.getElementById("prescription_items").value);
+  if (prescription_items.length > 0) {
+    await fetch("http://localhost:5000/api/opd/prescriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ consultation_id: consultData.consultation_id, items: prescription_items })
+    });
+  }
+
+  const investigation_items = parseInvestigations(document.getElementById("investigation_items").value);
+  if (investigation_items.length > 0) {
+    await fetch("http://localhost:5000/api/opd/investigations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ consultation_id: consultData.consultation_id, items: investigation_items })
+    });
+  }
+
+  alert("Consultation saved");
+});
+</script>
+</body>
+</html>
